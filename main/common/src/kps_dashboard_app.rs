@@ -1,6 +1,5 @@
 use std::{
     collections::VecDeque,
-    rc::Rc,
     time::{Duration, Instant},
 };
 
@@ -10,17 +9,12 @@ use eframe::{
 };
 use egui::{Color32, TextureHandle, ViewportBuilder};
 use serde::{Deserialize, Serialize};
-use winit::platform::windows::EventLoopBuilderExtWindows;
 
 use crate::{
-    global_listener_app::ListenerWrap,
-    key::Key,
-    key_message::KeyMessage,
-    message_dialog,
-    msg_hook::{self, create_msg_hook},
+    global_listener::GlobalListener, key::Key, key_message::KeyMessage, message_dialog, msg_hook,
 };
 
-use crate::global_listener_app::ListenerWrap as MpscReceiver;
+use crossbeam::channel::Receiver as MpscReceiver;
 
 pub struct MainApp {
     kps_setting: KpsSetting,
@@ -36,10 +30,6 @@ impl MainApp {
     }
 
     pub fn run(self) {
-        let keys_receiver = ListenerWrap::new();
-
-        let hook_shared = msg_hook::HookShared::new();
-        let hook_shared_1 = hook_shared.clone();
         let edge = Self::EDGE;
         let icon_data = {
             let img = image::load_from_memory(include_bytes!("../../icons/kps_icon.png")).unwrap();
@@ -66,22 +56,12 @@ impl MainApp {
                 power_preference: PowerPreference::HighPerformance,
                 ..Default::default()
             },
-            event_loop_builder: Some(Box::new(|event_loop_builder| {
-                event_loop_builder.with_msg_hook(create_msg_hook::<true>(hook_shared_1));
-            })),
             ..Default::default()
         };
         eframe::run_native(
             "HP KPS Dashboard",
             native_options,
-            Box::new(|cc| {
-                Ok(Box::new(App::new(
-                    cc,
-                    keys_receiver,
-                    self.kps_setting,
-                    hook_shared,
-                )))
-            }),
+            Box::new(|cc| Ok(Box::new(App::new(cc, self.kps_setting)))),
         )
         .unwrap();
     }
@@ -93,19 +73,23 @@ struct App {
     keys_receiver: MpscReceiver<KeyMessage>,
     keys_message_buf: Vec<KeyMessage>,
     key_repeat_flags: [bool; Self::KEY_REPEAT_FLAGS_CAP],
+    _global_listener: GlobalListener,
 }
 
 impl App {
     const KEY_REPEAT_FLAGS_CAP: usize = Key::LAST_KEY as usize;
 
-    pub fn new(
-        cc: &eframe::CreationContext<'_>,
-        keys_receiver: MpscReceiver<KeyMessage>,
-        kps_setting: KpsSetting,
-        hook_shared: Rc<msg_hook::HookShared>,
-    ) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, kps_setting: KpsSetting) -> Self {
         cc.egui_ctx.request_repaint();
-        hook_shared.egui_ctx.set(cc.egui_ctx.clone()).unwrap();
+        let cap = crate::CHANNEL_CAP;
+        let (keys_sender, keys_receiver) = crossbeam::channel::bounded(cap);
+        let hook_shared = msg_hook::HookShared {
+            egui_ctx: cc.egui_ctx.clone(),
+        };
+        let global_listener = GlobalListener::new(
+            msg_hook::create_msg_hook(keys_sender, hook_shared),
+            msg_hook::create_register_raw_input_hook(),
+        );
         let [r, g, b] = kps_setting.background_color;
         Self {
             kps: Kps::new(&cc.egui_ctx, kps_setting),
@@ -113,6 +97,7 @@ impl App {
             keys_receiver,
             keys_message_buf: Vec::with_capacity(64),
             key_repeat_flags: [false; Self::KEY_REPEAT_FLAGS_CAP],
+            _global_listener: global_listener,
         }
     }
 }

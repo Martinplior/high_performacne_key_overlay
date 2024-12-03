@@ -7,7 +7,7 @@ use crate::{
     key::Key,
     key_property::{KeyCounterProperty, KeyDirection, KeyProperty},
     message_dialog,
-    u_color32::UColor32,
+    ucolor32::UColor32,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

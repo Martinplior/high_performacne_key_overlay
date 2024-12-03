@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 use windows::Win32::UI::Input::KeyboardAndMouse::{self, VIRTUAL_KEY};
 
@@ -255,7 +257,6 @@ impl Key {
         }
     }
 
-    #[allow(dead_code)]
     pub fn to_virtual_key(self) -> VIRTUAL_KEY {
         use Key::*;
         use KeyboardAndMouse::*;

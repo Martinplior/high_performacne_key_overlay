@@ -13,7 +13,7 @@ use crate::{
 
 use super::AppSharedData;
 
-use crate::global_listener_app::ListenerWrap as MpscReceiver;
+use crossbeam::channel::Receiver as MpscReceiver;
 
 macro_rules! grid_new_row {
     ($ui:ident, $b: block) => {{

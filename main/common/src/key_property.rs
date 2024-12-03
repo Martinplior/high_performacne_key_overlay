@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{key::Key, u_color32::UColor32};
+use crate::{key::Key, ucolor32::UColor32};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KeyCounterProperty {

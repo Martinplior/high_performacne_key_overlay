@@ -19,7 +19,3 @@ impl KeyMessage {
         }
     }
 }
-
-unsafe impl bytemuck::Zeroable for KeyMessage {}
-unsafe impl bytemuck::NoUninit for KeyMessage {}
-unsafe impl bytemuck::AnyBitPattern for KeyMessage {}

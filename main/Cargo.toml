@@ -5,26 +5,28 @@ members = [
     "kps_dashboard_app",
     "main_app",
     "setting_app",
-    "global_listener_app"
 ]
 
 [workspace.dependencies]
 common = { path = "./common" }
 
-eframe = { path = "../custom/egui-0.29.1/crates/eframe", features = ["wgpu"] }
-egui = { path = "../custom/egui-0.29.1/crates/egui", features = ["serde"] }
-epaint = { path = "../custom/egui-0.29.1/crates/epaint" }
+# eframe = { path = "../custom/egui-0.29.1/crates/eframe", features = ["wgpu"] }
+# egui = { path = "../custom/egui-0.29.1/crates/egui", features = ["serde"] }
+# epaint = { path = "../custom/egui-0.29.1/crates/epaint" }
+
+# before we can implement native vulkan, just use the original crates
+eframe = { version = "0.29.1", features = ["wgpu"] }
+egui = { version = "0.29.1", features = ["serde"] }
+epaint = "0.29.1"
 
 winit = "0.30.5"
 serde = { version = "1.0.215", features = ["derive"] }
-serde_json = "1.0.132"
+serde_json = "1.0.133"
 font-kit = "0.14.2"
 owned_ttf_parser = "0.25.0"
 crossbeam = "0.8.4"
 rfd = "0.15.1"
 image = "0.25.5"
-interprocess = "2.2.2"
-bytemuck = "1.20.0"
 
 windows = { version = "0.58.0", features = [
     "Win32_Foundation",

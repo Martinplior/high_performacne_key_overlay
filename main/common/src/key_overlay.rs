@@ -10,7 +10,7 @@ use crate::{
 };
 use egui::{Color32, FontData, FontDefinitions, FontFamily, Rounding, TextureHandle};
 
-use crate::global_listener_app::ListenerWrap as MpscReceiver;
+use crossbeam::channel::Receiver as MpscReceiver;
 
 #[derive(Debug)]
 struct KeyMap {
@@ -145,31 +145,40 @@ impl KeyHandler {
 
     fn update(&mut self, key_message: KeyMessage) {
         debug_assert!(key_message.key != Key::Unknown);
+
         let mut inner_update = |indexes: &[usize]| -> Option<()> {
             let first_key_drawer = self.key_drawers.get_mut(*indexes.first()?)?;
-            if key_message.is_pressed && first_key_drawer.begin_hold_instant.is_none() {
-                for index in indexes.iter() {
-                    let key_property = self.key_properties.get_mut(*index)?;
-                    let key_drawer = self.key_drawers.get_mut(*index)?;
-                    if key_property.key_counter.0 {
-                        key_drawer.increase_count();
+
+            let now_pressed = key_message.is_pressed;
+            let prev_pressed = first_key_drawer.begin_hold_instant.is_some();
+
+            match (prev_pressed, now_pressed) {
+                (false, true) => {
+                    for index in indexes.iter() {
+                        let key_property = self.key_properties.get_mut(*index)?;
+                        let key_drawer = self.key_drawers.get_mut(*index)?;
+                        if key_property.key_counter.0 {
+                            key_drawer.increase_count();
+                        }
+                        key_drawer.begin_hold_instant = Some(key_message.instant);
                     }
-                    key_drawer.begin_hold_instant = Some(key_message.instant);
                 }
-            } else if !key_message.is_pressed && first_key_drawer.begin_hold_instant.is_some() {
-                for index in indexes.iter() {
-                    let key_drawer = self.key_drawers.get_mut(*index)?;
-                    let bar =
-                        KeyBar::new(key_drawer.begin_hold_instant.take()?, key_message.instant);
-                    key_drawer.add_bar(bar);
+                (true, false) => {
+                    for index in indexes.iter() {
+                        let key_drawer = self.key_drawers.get_mut(*index)?;
+                        let bar =
+                            KeyBar::new(key_drawer.begin_hold_instant.take()?, key_message.instant);
+                        key_drawer.add_bar(bar);
+                    }
                 }
+                _ => (),
             }
             Some(())
         };
 
         self.key_map
             .get(key_message.key)
-            .map(|indexes| inner_update(indexes).unwrap());
+            .map(|indexes| unsafe { inner_update(indexes).unwrap_unchecked() });
     }
 
     fn remove_outer_bar(&mut self, instant_now: Instant) {

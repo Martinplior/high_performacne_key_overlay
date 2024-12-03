@@ -68,12 +68,13 @@ impl KeyDrawer {
 
     pub fn remove_outer_bar(&mut self, instant_now: Instant) {
         let dead_line = instant_now - self.max_bar_duration;
-        let count = self
-            .bar_queue
-            .iter()
-            .take_while(|&bar| bar.release_instant < dead_line)
-            .count();
-        self.bar_queue.drain(..count);
+        while let Some(bar) = self.bar_queue.front() {
+            if bar.release_instant < dead_line {
+                self.bar_queue.pop_front();
+            } else {
+                break;
+            }
+        }
     }
 
     pub fn draw_on(
@@ -149,16 +150,14 @@ impl KeyDrawer {
             ))
         });
         bars_painter.extend(bar_shapes_iter);
-        self.begin_hold_instant
-            .as_ref()
-            .map(|current_pressed_instant| {
-                let head = KeyBar::compute_pos(
-                    instant_now - *current_pressed_instant,
-                    key_property.bar_speed,
-                );
-                let rect = bar_rect(head, 0.0);
-                bars_painter.rect_filled(rect, Rounding::ZERO, key_property.pressed_color);
-            });
+        self.begin_hold_instant.map(|current_pressed_instant| {
+            let head = KeyBar::compute_pos(
+                instant_now - current_pressed_instant,
+                key_property.bar_speed,
+            );
+            let rect = bar_rect(head, 0.0);
+            bars_painter.rect_filled(rect, Rounding::ZERO, key_property.pressed_color);
+        });
         if let (true, fade_length) = key_property.fade_length {
             let egui::Rect {
                 min: clip_min,

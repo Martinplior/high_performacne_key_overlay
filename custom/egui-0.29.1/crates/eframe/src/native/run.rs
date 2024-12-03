@@ -49,10 +49,6 @@ fn with_event_loop<R>(
         } else {
             event_loop_lock.insert(create_event_loop(&mut native_options)?)
         };
-
-        // Martinplior
-        event_loop.listen_device_events(winit::event_loop::DeviceEvents::Always);
-
         Ok(f(event_loop, native_options))
     })
 }

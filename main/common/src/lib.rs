@@ -1,11 +1,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
-pub mod global_listener_app;
 pub mod kps_dashboard_app;
 pub mod main_app;
 pub mod setting_app;
 
-mod interprocess_channel;
+mod global_listener;
 mod key;
 mod key_bar;
 mod key_drawer;
@@ -15,8 +14,9 @@ mod key_property;
 mod message_dialog;
 mod msg_hook;
 mod setting;
-mod u_color32;
+mod ucolor32;
 mod utils;
+mod win_utils;
 
 /// large enough to avoid jam
 const CHANNEL_CAP: usize = u16::MAX as usize + 1;
@@ -40,6 +40,8 @@ pub fn graceful_run<R>(
     std::panic::catch_unwind(f).map_err(|err| {
         let message = if let Some(err) = err.downcast_ref::<String>() {
             err.clone()
+        } else if let Some(err) = err.downcast_ref::<&str>() {
+            err.to_string()
         } else {
             format!("{:?}, type_id = {:?}", err, err.type_id())
         };
@@ -55,7 +57,7 @@ mod tests {
 
     use egui::{Color32, FontDefinitions};
 
-    use crate::{setting::Setting, u_color32::UColor32};
+    use crate::{setting::Setting, ucolor32::UColor32};
 
     #[test]
     fn query_fonts() {

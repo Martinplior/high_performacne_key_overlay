@@ -1,21 +1,12 @@
-use std::{rc::Rc, sync::Arc};
+use std::sync::Arc;
 
 use eframe::{
     egui_wgpu::WgpuConfiguration,
     wgpu::{Backends, PowerPreference, PresentMode},
 };
 use egui::ViewportBuilder;
-use winit::platform::windows::EventLoopBuilderExtWindows;
 
-use crate::{
-    global_listener_app::ListenerWrap,
-    key_message::KeyMessage,
-    key_overlay::KeyOverlay,
-    msg_hook::{self, create_msg_hook},
-    setting::Setting,
-};
-
-use crate::global_listener_app::ListenerWrap as MpscReceiver;
+use crate::{global_listener::GlobalListener, key_overlay::KeyOverlay, msg_hook, setting::Setting};
 
 mod menu;
 mod setting_area;
@@ -34,11 +25,6 @@ impl SettingApp {
     pub fn run(mut self) {
         let setting = self.setting.take().unwrap();
         let enable_vsync = setting.window_setting.enable_vsync;
-
-        let keys_receiver = ListenerWrap::new();
-
-        let hook_shared = msg_hook::HookShared::new();
-        let hook_shared_1 = hook_shared.clone();
         let min_edge = App::WINDOW_MIN_EDGE;
         let edge = min_edge + 200.0;
         let icon_data = {
@@ -69,24 +55,13 @@ impl SettingApp {
                 power_preference: PowerPreference::HighPerformance,
                 ..Default::default()
             },
-            event_loop_builder: Some(Box::new(|event_loop_builder| {
-                event_loop_builder.with_msg_hook(create_msg_hook::<false>(hook_shared_1));
-            })),
             ..Default::default()
         };
 
         eframe::run_native(
             "设置",
             native_options,
-            Box::new(|cc| {
-                Ok(Box::new(App::new(
-                    cc,
-                    keys_receiver,
-                    setting,
-                    icon_data,
-                    hook_shared,
-                )))
-            }),
+            Box::new(|cc| Ok(Box::new(App::new(cc, setting, icon_data)))),
         )
         .unwrap();
     }
@@ -107,6 +82,7 @@ struct AppSharedData {
 
 struct App {
     shared_data: AppSharedData,
+    _global_listener: GlobalListener,
     icon_data: Arc<egui::IconData>,
     menu: menu::Menu,
     setting_area: setting_area::SettingArea,
@@ -115,13 +91,19 @@ struct App {
 impl App {
     fn new(
         cc: &eframe::CreationContext<'_>,
-        keys_receiver: MpscReceiver<KeyMessage>,
         setting: Setting,
         icon_data: Arc<egui::IconData>,
-        hook_shared: Rc<msg_hook::HookShared>,
     ) -> Self {
         cc.egui_ctx.set_theme(egui::ThemePreference::Dark);
-        hook_shared.egui_ctx.set(cc.egui_ctx.clone()).unwrap();
+        let cap = crate::CHANNEL_CAP;
+        let (keys_sender, keys_receiver) = crossbeam::channel::bounded(cap);
+        let hook_shared = msg_hook::HookShared {
+            egui_ctx: cc.egui_ctx.clone(),
+        };
+        let global_listener = GlobalListener::new(
+            msg_hook::create_msg_hook(keys_sender, hook_shared),
+            msg_hook::create_register_raw_input_hook(),
+        );
         let key_overlay = KeyOverlay::new(&cc.egui_ctx, setting.clone(), keys_receiver);
         let menu = menu::Menu::new();
         let setting_area = setting_area::SettingArea::new(&setting);
@@ -135,6 +117,7 @@ impl App {
         };
         Self {
             shared_data,
+            _global_listener: global_listener,
             icon_data,
             menu,
             setting_area,

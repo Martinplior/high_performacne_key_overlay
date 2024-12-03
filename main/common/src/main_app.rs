@@ -1,21 +1,15 @@
-use std::rc::Rc;
-
 use eframe::{
     egui_wgpu::WgpuConfiguration,
     wgpu::{Backends, PowerPreference, PresentMode},
 };
 use egui::ViewportBuilder;
-use winit::platform::windows::EventLoopBuilderExtWindows;
 
 use crate::{
-    global_listener_app::ListenerWrap,
-    key_message::KeyMessage,
+    global_listener::GlobalListener,
     key_overlay::KeyOverlay,
-    msg_hook::{self, create_msg_hook},
+    msg_hook,
     setting::{Setting, WindowSetting},
 };
-
-use crate::global_listener_app::ListenerWrap as MpscReceiver;
 
 pub struct MainApp {
     setting: Option<Setting>,
@@ -36,10 +30,6 @@ impl MainApp {
             enable_vsync,
         } = setting.window_setting;
 
-        let keys_receiver = ListenerWrap::new();
-
-        let hook_shared = msg_hook::HookShared::new();
-        let hook_shared_1 = hook_shared.clone();
         let icon_data = {
             let img = image::load_from_memory(include_bytes!("../../icons/main_icon.png")).unwrap();
             let width = img.width();
@@ -69,15 +59,12 @@ impl MainApp {
                 power_preference: PowerPreference::HighPerformance,
                 ..Default::default()
             },
-            event_loop_builder: Some(Box::new(|event_loop_builder| {
-                event_loop_builder.with_msg_hook(create_msg_hook::<true>(hook_shared_1));
-            })),
             ..Default::default()
         };
         eframe::run_native(
             "HP KeyOverlay",
             native_options,
-            Box::new(|cc| Ok(Box::new(App::new(cc, keys_receiver, setting, hook_shared)))),
+            Box::new(|cc| Ok(Box::new(App::new(cc, setting)))),
         )
         .unwrap();
     }
@@ -85,19 +72,26 @@ impl MainApp {
 
 struct App {
     key_overlay: KeyOverlay,
+    _global_listener: GlobalListener,
 }
 
 impl App {
-    pub fn new(
-        cc: &eframe::CreationContext<'_>,
-        keys_receiver: MpscReceiver<KeyMessage>,
-        setting: Setting,
-        hook_shared: Rc<msg_hook::HookShared>,
-    ) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, setting: Setting) -> Self {
         cc.egui_ctx.request_repaint();
+        let cap = crate::CHANNEL_CAP;
+        let (keys_sender, keys_receiver) = crossbeam::channel::bounded(cap);
+        let hook_shared = msg_hook::HookShared {
+            egui_ctx: cc.egui_ctx.clone(),
+        };
+        let global_listener = GlobalListener::new(
+            msg_hook::create_msg_hook(keys_sender, hook_shared),
+            msg_hook::create_register_raw_input_hook(),
+        );
         let key_overlay = KeyOverlay::new(&cc.egui_ctx, setting, keys_receiver);
-        hook_shared.egui_ctx.set(cc.egui_ctx.clone()).unwrap();
-        Self { key_overlay }
+        Self {
+            key_overlay,
+            _global_listener: global_listener,
+        }
     }
 }
 
